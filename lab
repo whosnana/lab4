@@ -1,0 +1,80 @@
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///library.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+
+# Моделі
+class Author(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+
+
+class Publisher(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+
+
+class Book(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    published_year = db.Column(db.Integer, nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('author.id'), nullable=False)
+    publisher_id = db.Column(db.Integer, db.ForeignKey('publisher.id'), nullable=False)
+
+
+# Створення таблиць у базі даних (якщо вони не існують)
+with app.app_context():
+    db.create_all()  # Створює всі таблиці, якщо вони ще не існують
+
+
+@app.route('/create_book', methods=['POST'])
+def create_book():
+    try:
+        data = request.get_json()
+
+        # Перевірка наявності необхідних даних
+        if not data or 'title' not in data or 'published_year' not in data or 'author_id' not in data or 'publisher_id' not in data:
+            return jsonify({"message": "Missing required fields"}), 400
+
+        # Створення нової книги
+        new_book = Book(
+            title=data['title'],
+            published_year=data['published_year'],
+            author_id=data['author_id'],
+            publisher_id=data['publisher_id']
+        )
+
+        # Додавання книги в базу даних
+        db.session.add(new_book)
+        db.session.commit()
+
+        return jsonify({"message": f"Book '{new_book.title}' created successfully!"}), 201
+    except Exception as e:
+        return jsonify({"message": f"Error occurred: {str(e)}"}), 500
+
+
+@app.route('/update_book/<int:book_id>', methods=['POST'])
+def update_book(book_id):
+    try:
+        book = Book.query.get(book_id)
+        if not book:
+            return jsonify({"message": "Book not found"}), 404
+
+        # Оновлення даних книги
+        data = request.get_json()
+        book.title = data.get('title', book.title)  # Якщо не передано, залишаємо старе значення
+        book.published_year = data.get('published_year', book.published_year)
+
+        db.session.commit()
+
+        return jsonify({"message": f"Book with ID {book_id} has been updated!"}), 200
+    except Exception as e:
+        return jsonify({"message": f"Error occurred: {str(e)}"}), 500
+
+
+if name == '__main__':
+    app.run(debug=True)
